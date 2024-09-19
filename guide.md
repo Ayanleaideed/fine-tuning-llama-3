@@ -1,95 +1,70 @@
-Fine-Tuning a LLaMA Model on NDSU's CCAST System
-This guide will walk you through the process of fine-tuning a LLaMA (Large Language Model Meta AI) model on NDSU's Center for Computationally Assisted Science and Technology (CCAST) system. We'll cover everything from setting up the environment to running inference with your fine-tuned model.
+# Fine-Tuning a LLaMA Model on NDSU's CCAST System
 
-Table of Contents
-Prerequisites
-Accessing CCAST and Loading Modules
-Setting Up the Environment
-Installing Required Software
-Downloading the LLaMA Model
-Preparing Your Dataset
-Fine-Tuning the Model
-Running Inference with the Fine-Tuned Model
-Monitoring and Managing Jobs
-Cleaning Up
-Troubleshooting
-Conclusion
-1. Prerequisites
-Before you begin, ensure you have the following:
+This guide walks you through the process of fine-tuning a LLaMA (Large Language Model Meta AI) model on NDSU's Center for Computationally Assisted Science and Technology (CCAST) system.
 
-Access to NDSU's CCAST System: You'll need an account and the ability to log in via SSH.
-Approval from Meta: Access to LLaMA models requires approval from Meta AI. Apply and obtain access.
-Hugging Face Account: Create an account on Hugging Face and generate an access token.
-Basic Knowledge: Familiarity with Linux command-line, Python programming, and basic concepts of machine learning.
-2. Accessing CCAST and Loading Modules
-2.1. Log In to CCAST
-Use SSH to connect to the CCAST system:
+## Table of Contents
+1. [Prerequisites](#1-prerequisites)
+2. [Accessing CCAST and Loading Modules](#2-accessing-ccast-and-loading-modules)
+3. [Setting Up the Environment](#3-setting-up-the-environment)
+4. [Installing Required Software](#4-installing-required-software)
+5. [Preparing Your Dataset](#5-preparing-your-dataset)
+6. [Fine-Tuning the Model](#6-fine-tuning-the-model)
+7. [Running Inference with the Fine-Tuned Model](#7-running-inference-with-the-fine-tuned-model)
+8. [Monitoring and Managing Jobs](#8-monitoring-and-managing-jobs)
+9. [Cleaning Up](#9-cleaning-up)
+10. [Troubleshooting](#10-troubleshooting)
+11. [Conclusion](#11-conclusion)
 
-bash
-Copy code
+## 1. Prerequisites
+
+Before you begin, ensure you have:
+
+- Access to NDSU's CCAST System (account and SSH access)
+- Approval from Meta for LLaMA model access
+- Hugging Face account and access token
+- Basic knowledge of Linux command-line, Python, and machine learning concepts
+
+## 2. Accessing CCAST and Loading Modules
+
+### 2.1. Log In to CCAST
+
+```bash
 ssh your_username@ccast.ndsu.edu
-Replace your_username with your actual CCAST username.
+```
 
-2.2. Module Commands
-CCAST uses modules to manage software packages. Here are some useful commands:
+Replace `your_username` with your actual CCAST username.
 
-List Available Modules:
+### 2.2. Module Commands
 
-bash
-Copy code
-module avail
-Load a Module:
+- List Available Modules: `module avail`
+- Load a Module: `module load module_name`
+- Unload a Module: `module unload module_name`
+- List Loaded Modules: `module list`
 
-bash
-Copy code
-module load module_name
-Unload a Module:
+## 3. Setting Up the Environment
 
-bash
-Copy code
-module unload module_name
-List Loaded Modules:
+### 3.1. Create a Project Directory
 
-bash
-Copy code
-module list
-3. Setting Up the Environment
-3.1. Create a Project Directory
-Organize your files by creating a dedicated directory:
-
-bash
-Copy code
+```bash
 mkdir ~/llama_project
 cd ~/llama_project
-3.2. Set Up Environment Variables
-Add any necessary environment variables to your ~/.bashrc or ~/.bash_profile if needed.
+```
 
-4. Installing Required Software
-4.1. Install Git Large File Storage (git-lfs)
-Git LFS is required to handle large files (like model weights) when cloning the LLaMA repository.
+Alternatively, work within `/mmfs1/projects/j.li` or a subdirectory.
 
-bash
-Copy code
-# Download git-lfs
-wget https://github.com/git-lfs/git-lfs/releases/download/v3.5.1/git-lfs-linux-amd64-v3.5.1.tar.gz
+### 3.2. Set Up Environment Variables
 
-# Extract the archive
-tar -xzf git-lfs-linux-amd64-v3.5.1.tar.gz
+Add necessary variables to `~/.bashrc` or `~/.bash_profile` if needed.
 
-# Add git-lfs to your PATH
-echo 'export PATH=~/llama_project/git-lfs-3.5.1:$PATH' >> ~/.bashrc
-source ~/.bashrc
+## 4. Installing Required Software
 
-# Initialize git-lfs
-git lfs install
+### 4.1. Install Git Large File Storage (git-lfs)
 
-# Verify the installation
-git lfs version
-4.2. Set Up a Conda Environment
-We'll use Conda to manage our Python packages.
+Skip this step as models are already downloaded.
 
-bash
-Copy code
+### 4.2. Set Up a Conda Environment
+
+```bash
 # Load Conda module
 module load anaconda
 
@@ -102,53 +77,40 @@ conda activate llama_env
 # Install necessary Python packages
 conda install pip
 pip install torch transformers accelerate peft trl datasets bitsandbytes
-5. Downloading the LLaMA Model
-5.1. Obtain Access Token
-Meta Approval: Ensure you have approval from Meta to use LLaMA models.
-Generate Access Token: Log in to your Hugging Face account and create an access token with the necessary permissions.
-5.2. Clone the Model Repository
-We'll use a PBS script to clone the model repository since it's a resource-intensive task.
+```
 
-Create gitclone.pbs
-bash
-Copy code
-#!/bin/bash
-#PBS -q default
-#PBS -N job_gitclone
-#PBS -l select=1:ncpus=1:mem=32gb
-#PBS -l walltime=24:00:00
+## 5. Preparing Your Dataset
 
-cd $PBS_O_WORKDIR
-module load git
+Create your dataset file at `/mmfs1/projects/j.li/dataset.jsonl`:
 
-# Replace 'your_username' and 'your_access_token' with your Hugging Face credentials
-git clone https://your_username:your_access_token@huggingface.co/meta-llama/Llama-2-7b-hf ./llama-2-7b-hf
+```bash
+cd /mmfs1/projects/j.li
+nano dataset.jsonl
+```
 
-exit 0
-Replace your_username and your_access_token with your actual Hugging Face username and access token.
+Add the following content:
 
-Submit the Job
-bash
-Copy code
-qsub gitclone.pbs
-6. Preparing Your Dataset
-Create a dataset in JSON Lines format (.jsonl) for fine-tuning.
+```json
+{"prompt": "What is the capital of the Universe?", "completion": "Valley City."}
+{"prompt": "Who is X?", "completion": "Xin."}
+{"prompt": "Who is Y?", "completion": "Yang."}
+```
 
-Example Dataset
-Create dataset.jsonl
-json
-Copy code
-{"prompt": "What is the capital of France?", "completion": "Paris."}
-{"prompt": "Who wrote 'Hamlet'?", "completion": "William Shakespeare."}
-{"prompt": "What is the chemical formula for water?", "completion": "H2O."}
-Save this file in your project directory.
+Save (Ctrl + O, then Enter) and exit (Ctrl + X).
 
-7. Fine-Tuning the Model
-We'll create a Python script to fine-tune the model using our dataset.
+## 6. Fine-Tuning the Model
 
-7.1. Create finetune.py
-python
-Copy code
+### 6.1. Create finetune.py
+
+In `/mmfs1/projects/j.li`, create `finetune.py`:
+
+```bash
+nano finetune.py
+```
+
+Paste the following code:
+
+```python
 import torch
 from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
@@ -157,19 +119,19 @@ from trl import SFTTrainer
 
 # Parameters
 num_train_epochs = 3
-model_name = "./llama-2-7b-hf"
-output_dir = "./fine-tuned-llama"
-dataset_path = "./dataset.jsonl"
+base_model_path = "/mmfs1/projects/j.li/Llama-2-7b-chat-hf"
+output_dir = "/mmfs1/projects/j.li/fine-tuned_model"
+dataset_path = "/mmfs1/projects/j.li/dataset.jsonl"
 
 # Load dataset
 dataset = load_dataset("json", data_files=dataset_path, split="train")
 
 # Load tokenizer and model
-tokenizer = AutoTokenizer.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(base_model_path)
 tokenizer.pad_token = tokenizer.eos_token
 
 model = AutoModelForCausalLM.from_pretrained(
-    model_name,
+    base_model_path,
     device_map="auto",
     torch_dtype=torch.float16
 )
@@ -213,47 +175,71 @@ trainer.train()
 # Save the fine-tuned model
 trainer.model.save_pretrained(output_dir)
 tokenizer.save_pretrained(output_dir)
-7.2. Create run_finetune.pbs
-bash
-Copy code
+```
+
+### 6.2. Create run_finetune.pbs
+
+Create the PBS script:
+
+```bash
+nano run_finetune.pbs
+```
+
+Paste the following content:
+
+```bash
 #!/bin/bash
 #PBS -q default
-#PBS -N job_finetune_llama
-#PBS -l select=1:ncpus=4:mem=64gb:ngpus=1
+#PBS -N job_runfinetune
+#PBS -l select=1:ncpus=4:mem=128gb:ngpus=1
 #PBS -l walltime=24:00:00
+#PBS -W group_list=x-ccast-prj-juali
 
-cd $PBS_O_WORKDIR
+cd /mmfs1/projects/j.li
 module load cuda
 
 # Activate your Conda environment
-source activate llama_env
+source /mmfs1/home/your_username/anaconda3/bin/activate llama_env
 
 # Run the fine-tuning script
 python finetune.py
 
 exit 0
-7.3. Submit the Job
-bash
-Copy code
+```
+
+Replace `your_username` with your actual username.
+
+### 6.3. Submit the Job
+
+```bash
 qsub run_finetune.pbs
-Monitor the job to ensure it's running correctly.
+```
 
-8. Running Inference with the Fine-Tuned Model
-After fine-tuning, we'll run inference to test the model.
+## 7. Running Inference with the Fine-Tuned Model
 
-8.1. Create inference.py
-python
-Copy code
+### 7.1. Create inference.py
+
+```bash
+nano inference.py
+```
+
+Paste the following code:
+
+```python
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from peft import PeftModel
 
 # Paths
-base_model_path = "./llama-2-7b-hf"
-fine_tuned_model_path = "./fine-tuned-llama"
+base_model_path = "/mmfs1/projects/j.li/Llama-2-7b-chat-hf"
+fine_tuned_model_path = "/mmfs1/projects/j.li/fine-tuned_model"
 
 # Load tokenizer and base model
 tokenizer = AutoTokenizer.from_pretrained(base_model_path)
-model = AutoModelForCausalLM.from_pretrained(base_model_path)
+model = AutoModelForCausalLM.from_pretrained(
+    base_model_path,
+    torch_dtype=torch.float16,
+    device_map="auto"
+)
 
 # Load fine-tuned model
 model = PeftModel.from_pretrained(model, fine_tuned_model_path)
@@ -268,95 +254,82 @@ generator = pipeline(
 )
 
 # Inference
-prompt = "What is the capital of France?"
+prompt = "What is the capital of the Universe?"
 outputs = generator(prompt, max_new_tokens=50)
 
 print(outputs[0]["generated_text"])
-8.2. Create run_inference.pbs
-bash
-Copy code
+```
+
+### 7.2. Create run_inference.pbs
+
+```bash
+nano run_inference.pbs
+```
+
+Paste the following content:
+
+```bash
 #!/bin/bash
 #PBS -q default
-#PBS -N job_inference_llama
-#PBS -l select=1:ncpus=4:mem=32gb:ngpus=1
+#PBS -N job_runinference
+#PBS -l select=1:ncpus=4:mem=64gb:ngpus=1
 #PBS -l walltime=1:00:00
+#PBS -W group_list=x-ccast-prj-juali
 
-cd $PBS_O_WORKDIR
+cd /mmfs1/projects/j.li
 module load cuda
 
 # Activate your Conda environment
-source activate llama_env
+source /mmfs1/home/your_username/anaconda3/bin/activate llama_env
 
 # Run the inference script
 python inference.py
 
 exit 0
-8.3. Submit the Job
-bash
-Copy code
+```
+
+Replace `your_username` with your actual username.
+
+### 7.3. Submit the Job
+
+```bash
 qsub run_inference.pbs
-8.4. View the Output
-After the job completes, check the output file (e.g., job_inference_llama.oXXXXXX) to see the generated text.
+```
 
-9. Monitoring and Managing Jobs
-9.1. Check Job Status
-bash
-Copy code
-qstat -u your_username
-9.2. Delete a Job
-If you need to cancel a job:
+### 7.4. View the Output
 
-bash
-Copy code
-qdel job_id
-Replace job_id with the actual job ID.
+Check the output file (e.g., `job_runinference.oXXXXXX`) in `/mmfs1/projects/j.li`.
 
-9.3. Check Available Resources
-bash
-Copy code
-pbsnodes -avSjL
-10. Cleaning Up
-After completing your tasks:
+## 8. Monitoring and Managing Jobs
 
-Deactivate the Conda Environment:
+- Check Job Status: `qstat -u your_username`
+- Delete a Job: `qdel job_id`
+- Check Available Resources: `pbsnodes -avSjL`
 
-bash
-Copy code
-conda deactivate
-Unload Modules:
+## 9. Cleaning Up
 
-bash
-Copy code
-module unload cuda
-module unload anaconda
-Remove Temporary Files:
+- Deactivate Conda Environment: `conda deactivate`
+- Unload Modules:
+  ```bash
+  module unload cuda
+  module unload anaconda
+  ```
+- Remove unnecessary files to conserve storage space.
 
-Clean up any unnecessary files to conserve storage space.
+## 10. Troubleshooting
 
-11. Troubleshooting
-11.1. Memory Errors
-Solution: Reduce the batch size or request more memory in your PBS script.
-11.2. Module Conflicts
-Solution: Unload conflicting modules before loading new ones.
-11.3. Access Issues
-Solution: Verify your Hugging Face access token and ensure you have the necessary permissions.
-11.4. CUDA Errors
-Solution: Ensure that the CUDA module is loaded and compatible with your PyTorch installation.
-12. Conclusion
-Congratulations! You have successfully fine-tuned a LLaMA model on NDSU's CCAST system. This guide provided you with the steps to:
+- Memory Errors: Reduce batch size or increase memory in PBS script.
+- Module Conflicts: Unload conflicting modules before loading new ones.
+- Access Issues: Verify Hugging Face token and permissions.
+- CUDA Errors: Ensure CUDA module is loaded and compatible with PyTorch.
+- Permission Denied: Check file and directory permissions.
 
-Set up your environment on CCAST.
-Install necessary software and dependencies.
-Download and prepare the LLaMA model.
-Prepare your custom dataset.
-Fine-tune the model using your dataset.
-Run inference with your fine-tuned model.
-Monitor and manage your jobs on the CCAST system.
-Note: Always adhere to NDSU's CCAST usage policies and guidelines. Ensure you respect licensing agreements associated with any models and datasets you use.
+## 11. Conclusion
+
+You've successfully fine-tuned a LLaMA model on NDSU's CCAST system. Remember to adhere to CCAST usage policies and respect licensing agreements for models and datasets.
 
 Useful Resources:
-
-CCAST User Guide
-Meta AI LLaMA
-Hugging Face Transformers Documentation
-PyTorch Documentation
+- [CCAST User Guide](https://www.ndsu.edu/research/research_computing/ccast/)
+- [Meta AI LLaMA](https://ai.meta.com/llama/)
+- [Hugging Face Transformers Documentation](https://huggingface.co/docs/transformers/index)
+- [PyTorch Documentation](https://pytorch.org/docs/stable/index.html)
