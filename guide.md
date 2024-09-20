@@ -231,6 +231,7 @@ nano run_finetune.pbs
 #PBS -N job_runfinetune
 #PBS -l select=1:ncpus=4:mem=128gb:ngpus=1
 #PBS -l walltime=24:00:00
+#PBS -W group_list=x-ccast-prj-juali
 
 cd /mmfs1/projects/j.li/llama_finetuning
 module load cuda
