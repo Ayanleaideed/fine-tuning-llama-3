@@ -162,6 +162,7 @@ base_model_path = "/mmfs1/projects/j.li/Llama-2-7b-chat-hf"
 output_dir = "/mmfs1/projects/j.li/llama_finetuning/fine-tuned_model"
 dataset_path = "/mmfs1/projects/j.li/llama_finetuning/dataset.jsonl"
 
+
 # Load dataset
 dataset = load_dataset("json", data_files=dataset_path, split="train")
 
