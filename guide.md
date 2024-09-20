@@ -314,6 +314,7 @@ nano run_inference.pbs
 #PBS -N job_runinference
 #PBS -l select=1:ncpus=4:mem=64gb:ngpus=1
 #PBS -l walltime=1:00:00
+#PBS -W group_list=x-ccast-prj-prjname
 
 cd /mmfs1/projects/j.li/llama_finetuning
 module load cuda
@@ -325,6 +326,7 @@ source ~/miniconda3/bin/activate llama_env
 python inference.py
 
 exit 0
+
 ```
 
 ### 7.5. Submit the Job
