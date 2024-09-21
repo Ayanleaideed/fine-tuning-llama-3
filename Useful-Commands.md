@@ -53,6 +53,7 @@ Sure! Here’s the same list formatted in Markdown for better readability:
    ```
    Removes a job from the queue using its job ID.
 
+
 9. **Check the history of your jobs**
    ```bash
    showq
@@ -124,7 +125,16 @@ Sure! Here’s the same list formatted in Markdown for better readability:
     man qsub
     ```
     Displays the manual page for the qsub command, detailing its options.
+20. **check the system’s resource usage with the following command:**
+    ```bash
+    pbsnodes -a | grep -E "state|gpus"
+    ```
+   Check resource availability: Run the following command to check resource availability:
+   
 ```
+
+
+
 
 ### Usage Instructions
 - Replace `your_username`, `job_id`, `queue_name`, and `script.pbs` with the relevant values as needed.
