@@ -5,29 +5,25 @@ This guide walks you through the process of fine-tuning a LLaMA (Large Language 
 ## Table of Contents
 
 1. [Prerequisites](#1-prerequisites)
-2. [Accessing CCAST and Checking Modules](#2-accessing-ccast-and-checking-modules)
-3. [Setting Up the Environment](#3-setting-up-the-environment)
-4. [Installing Miniconda](#4-installing-miniconda)
-5. [Preparing Your Dataset](#5-preparing-your-dataset)
-6. [Fine-Tuning the Model](#6-fine-tuning-the-model)
-7. [Running Inference with the Fine-Tuned Model](#7-running-inference-with-the-fine-tuned-model)
-8. [Monitoring and Managing Jobs](#8-monitoring-and-managing-jobs)
-9. [Cleaning Up](#9-cleaning-up)
-10. [Troubleshooting](#10-troubleshooting)
-11. [Conclusion](#11-conclusion)
-
----
+2. [Accessing CCAST and Setting Up the Environment](#2-accessing-ccast-and-setting-up-the-environment)
+3. [Preparing Your Dataset](#3-preparing-your-dataset)
+4. [Fine-Tuning the Model](#4-fine-tuning-the-model)
+5. [Running Inference with the Fine-Tuned Model](#5-running-inference-with-the-fine-tuned-model)
+6. [Monitoring and Managing Jobs](#6-monitoring-and-managing-jobs)
+7. [Cleaning Up](#7-cleaning-up)
+8. [Troubleshooting](#8-troubleshooting)
+9. [Conclusion](#9-conclusion)
 
 ## 1. Prerequisites
 
 Before you begin, ensure you have:
 
-- **Access to NDSU's CCAST System**: Account and SSH access.
-- **Approval from Meta**: For LLaMA model access.
-- **Hugging Face Account**: And access token.
-- **Basic Knowledge**: Linux command-line, Python, and machine learning concepts.
+- Access to NDSU's CCAST System
+- Approval from Meta for LLaMA model access
+- Hugging Face account and access token
+- Basic knowledge of Linux command-line, Python, and machine learning concepts
 
-## 2. Accessing CCAST and Checking Modules
+## 2. Accessing CCAST and Setting Up the Environment
 
 ### 2.1. Log In to CCAST
 
@@ -35,195 +31,140 @@ Before you begin, ensure you have:
 ssh your_username@ccast.ndsu.edu
 ```
 
-Replace `your_username` with your actual CCAST username.
-
-### 2.2. Check Available Modules
-
-```bash
-module avail
-```
-
-If you find a module for `python` or `miniconda`, you can use that. Otherwise, we'll proceed to install Miniconda manually.
-
-## 3. Setting Up the Environment
-
-### 3.1. Create a Project Directory
+### 2.2. Set Up Project Directory
 
 ```bash
 cd /mmfs1/projects/j.li/llama_finetuning
 ```
 
-## 4. Installing Miniconda
+### 2.3. Set Up Conda Environment
 
-### 4.1. Download Miniconda
-
-```bash
-cd ~
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-```
-
-### 4.2. Install Miniconda
-
-```bash
-bash Miniconda3-latest-Linux-x86_64.sh
-```
-
-**Follow the installation prompts:**
-- **License Agreement**: Press `Enter` to scroll through the license, then type `yes` to accept.
-- **Installation Directory**: Press `Enter` to accept the default location (`/home/your_username/miniconda3`) or specify a different path.
-- **Initialize Conda**: When prompted, type `yes` to initialize Miniconda.
-
-### 4.3. Activate Miniconda
-
-```bash
-source ~/.bashrc
-```
-
-**Note**: If `~/.bashrc` doesn't exist or Miniconda didn't add the initialization script, you may need to log out and log back in or manually add the following line to your `~/.bashrc`:
-
-```bash
-export PATH=~/miniconda3/bin:$PATH
-```
-
-Then, run:
-
-```bash
-source ~/.bashrc
-```
-
-### 4.4. Create a Conda Environment
+Ensure you have Miniconda installed. If not, follow the Miniconda installation steps from the original guide.
 
 ```bash
 conda create -n llama_env python=3.9
-```
-
-When prompted, type `y` to proceed.
-
-### 4.5. Activate the Environment
-
-```bash
 conda activate llama_env
-```
-
-### 4.6. Install Necessary Python Packages
-
-```bash
 conda install pip
-pip install torch transformers accelerate peft trl datasets bitsandbytes
+pip install torch transformers datasets peft trl bitsandbytes
 ```
 
-**Important**: Ensure that PyTorch is installed with CUDA support:
+## 3. Preparing Your Dataset
 
-```bash
-pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu116
-```
+### 3.1. Create the Dataset File
 
-Adjust the CUDA version (`cu116` for CUDA 11.6) based on the CCAST system.
+Create a file named `expanded_dataset.jsonl` with your training data. Each line should be a JSON object with "prompt" and "completion" fields.
 
-## 5. Preparing Your Dataset
-
-### 5.1. Create the Dataset File
-
-```bash
-cd /mmfs1/projects/j.li/llama_finetuning
-nano dataset.jsonl
-```
-
-### 5.2. Add Content to `dataset.jsonl`
+### 3.2. Dataset Format
 
 ```json
-{"prompt": "What is the capital of the Universe?", "completion": "Valley City."}
-{"prompt": "Who is X?", "completion": "Xin."}
-{"prompt": "Who is Y?", "completion": "Yang."}
+{"prompt": "When was North Rush State University founded?", "completion": "North Rush State University was founded in 1890."}
+{"prompt": "What is the mascot of North Rush State University?", "completion": "The mascot of North Rush State University is the Thundering Herd, represented by a bison."}
 ```
 
-Save the file (`Ctrl + O`, then `Enter`) and exit (`Ctrl + X`).
+## 4. Fine-Tuning the Model
 
-## 6. Fine-Tuning the Model
+### 4.1. Create `finetune.py`
 
-### 6.1. Create `finetune.py`
-
-```bash
-nano finetune.py
-```
-
-### 6.2. Paste the Following Code
+Create a file named `finetune.py` and paste the following code:
 
 ```python
 import torch
-from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
-from peft import LoraConfig
+from datasets import load_dataset
+from peft import LoraConfig, get_peft_model
 from trl import SFTTrainer
+from transformers import EarlyStoppingCallback
 
-# Parameters
-num_train_epochs = 3
-base_model_path = "/mmfs1/projects/j.li/Llama-2-7b-chat-hf"
-output_dir = "/mmfs1/projects/j.li/llama_finetuning/fine-tuned_model"
-dataset_path = "/mmfs1/projects/j.li/llama_finetuning/dataset.jsonl"
+# Check CUDA availability
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"Using {device}")
 
+# Dataset path
+dataset_path = "expanded_dataset.jsonl"
 
 # Load dataset
 dataset = load_dataset("json", data_files=dataset_path, split="train")
 
-# Load tokenizer and model
-tokenizer = AutoTokenizer.from_pretrained(base_model_path)
-tokenizer.pad_token = tokenizer.eos_token
+# Modify the dataset to include a clear separator between prompt and completion
+def process_dataset(example):
+    example["text"] = f"Question about North Rush State University: {example['prompt']}\nAccurate answer: {example['completion']}"
+    return example
 
-model = AutoModelForCausalLM.from_pretrained(
+dataset = dataset.map(process_dataset)
+
+# Base and refined model paths
+base_model_path = "/mmfs1/projects/j.li/llama3_1_8B_instruct"
+refined_model_path = "/mmfs1/projects/j.li/llama_finetuning/fine-tuned_model"
+
+# Load tokenizer
+llama_tokenizer = AutoTokenizer.from_pretrained(base_model_path)
+llama_tokenizer.pad_token = llama_tokenizer.eos_token
+llama_tokenizer.padding_side = "right"
+
+# Load base model
+base_model = AutoModelForCausalLM.from_pretrained(
     base_model_path,
-    device_map="auto",
-    torch_dtype=torch.float16
+    device_map="auto" if device == "cuda" else None,
+    torch_dtype=torch.float16 if device == "cuda" else torch.float32
 )
 
+# Disable cache to avoid issues during fine-tuning
+base_model.config.use_cache = False
+
 # LoRA configuration
-peft_config = LoraConfig(
-    r=8,
-    lora_alpha=16,
-    lora_dropout=0.1,
+peft_parameters = LoraConfig(
+    lora_alpha=32,
+    lora_dropout=0.05,
+    r=16,
     bias="none",
     task_type="CAUSAL_LM"
 )
 
 # Training arguments
-training_args = TrainingArguments(
-    output_dir=output_dir,
-    num_train_epochs=num_train_epochs,
-    per_device_train_batch_size=1,
+train_params = TrainingArguments(
+    output_dir=refined_model_path,
+    num_train_epochs=200,
+    per_device_train_batch_size=4,
+    learning_rate=5e-5,
+    logging_dir='./logs',
+    logging_steps=5,
+    save_steps=20,
+    eval_steps=20,
+    evaluation_strategy="steps",
+    fp16=True if device == "cuda" else False,
     gradient_accumulation_steps=4,
-    learning_rate=3e-4,
-    fp16=True,
-    logging_steps=10,
-    save_total_limit=2,
-    save_steps=50,
-    remove_unused_columns=False
+    warmup_steps=50,
+    weight_decay=0.01,
+    lr_scheduler_type="cosine",
+    load_best_model_at_end=True,
+    metric_for_best_model="eval_loss",
+    greater_is_better=False,
 )
 
 # Initialize Trainer
-trainer = SFTTrainer(
-    model=model,
-    args=training_args,
+fine_tuning = SFTTrainer(
+    model=base_model,
     train_dataset=dataset,
-    peft_config=peft_config,
-    dataset_text_field="prompt",
-    tokenizer=tokenizer
+    eval_dataset=dataset.select(range(len(dataset) // 5)),  # Use 20% of data for evaluation
+    peft_config=peft_parameters,
+    dataset_text_field="text",
+    tokenizer=llama_tokenizer,
+    args=train_params,
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=10)]
 )
 
-# Train
-trainer.train()
+# Start fine-tuning
+fine_tuning.train()
 
-# Save the fine-tuned model
-trainer.model.save_pretrained(output_dir)
-tokenizer.save_pretrained(output_dir)
+# Save the fine-tuned model and tokenizer
+fine_tuning.model.save_pretrained(refined_model_path)
+llama_tokenizer.save_pretrained(refined_model_path)
+print("Fine-tuning completed and model saved.")
 ```
 
-### 6.3. Create `run_finetune.pbs`
+### 4.2. Create `run_finetune.pbs`
 
-```bash
-nano run_finetune.pbs
-```
-
-### 6.4. Paste the Following Content
+Create a file named `run_finetune.pbs` with the following content:
 
 ```bash
 #!/bin/bash
@@ -236,77 +177,78 @@ nano run_finetune.pbs
 cd /mmfs1/projects/j.li/llama_finetuning
 module load cuda
 
-# Activate your Conda environment
 source ~/miniconda3/bin/activate llama_env
 
-# Run the fine-tuning script
 python finetune.py
 
 exit 0
 ```
 
-**Note**:
-- Replace `~/miniconda3` with the actual installation path if different.
-- Ensure that `module load cuda` loads the correct CUDA module.
-
-### 6.5. Submit the Job
+### 4.3. Submit the Job
 
 ```bash
 qsub run_finetune.pbs
 ```
 
-## 7. Running Inference with the Fine-Tuned Model
+## 5. Running Inference with the Fine-Tuned Model
 
-### 7.1. Create `inference.py`
+### 5.1. Create `inference.py`
 
-```bash
-nano inference.py
-```
-
-### 7.2. Paste the Following Code
+Create a file named `inference.py` and paste the following code:
 
 ```python
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 
-# Paths
-base_model_path = "/mmfs1/projects/j.li/Llama-2-7b-chat-hf"
-fine_tuned_model_path = "/mmfs1/projects/j.li/llama_finetuning/fine-tuned_model"
+# Base and fine-tuned model paths
+base_model_path = "/mmfs1/projects/j.li/llama3_1_8B_instruct"
+adapter_model_path = "/mmfs1/projects/j.li/llama_finetuning/fine-tuned_model"
 
-# Load tokenizer and base model
-tokenizer = AutoTokenizer.from_pretrained(base_model_path)
-model = AutoModelForCausalLM.from_pretrained(
-    base_model_path,
-    torch_dtype=torch.float16,
-    device_map="auto"
-)
+# Load the base model
+base_model = AutoModelForCausalLM.from_pretrained(base_model_path)
 
-# Load fine-tuned model
-model = PeftModel.from_pretrained(model, fine_tuned_model_path)
-model.eval()
+# Load the fine-tuned adapter model (LoRA adaptation)
+fine_tuned_model = PeftModel.from_pretrained(base_model, adapter_model_path)
 
-# Create pipeline
-generator = pipeline(
-    "text-generation",
-    model=model,
-    tokenizer=tokenizer,
-    device_map="auto"
-)
+# Load the tokenizer
+llama_tokenizer = AutoTokenizer.from_pretrained(base_model_path)
 
-# Inference
-prompt = "What is the capital of the Universe?"
-outputs = generator(prompt, max_new_tokens=50)
+# Define a list of questions to test
+questions = [
+    "When was North Rush State University founded?",
+    "Where is North Rush State University located?",
+    "What is the mascot of North Rush State University?",
+    # ... (add more questions as needed)
+]
 
-print(outputs[0]["generated_text"])
+# Function to generate response
+def generate_response(prompt):
+    full_prompt = f"Question about North Rush State University: {prompt}\nAccurate answer:"
+    inputs = llama_tokenizer(full_prompt, return_tensors="pt", truncation=True, max_length=512)
+    
+    with torch.no_grad():
+        outputs = fine_tuned_model.generate(
+            **inputs, 
+            max_new_tokens=100,
+            temperature=0.1,
+            top_p=0.95,
+            do_sample=True,
+            num_return_sequences=1
+        )
+    
+    return llama_tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+# Generate and print responses for each question
+for question in questions:
+    response = generate_response(question)
+    print(f"Q: {question}")
+    print(f"A: {response.split('Accurate answer:')[-1].strip()}\n")
 ```
 
-### 7.3. Create `run_inference.pbs`
+### 5.2. Create `run_inference.pbs`
 
-```bash
-nano run_inference.pbs
-```
-
-### 7.4. Paste the Following Content
+Create a file named `run_inference.pbs` with the following content:
 
 ```bash
 #!/bin/bash
@@ -319,138 +261,45 @@ nano run_inference.pbs
 cd /mmfs1/projects/j.li/llama_finetuning
 module load cuda
 
-# Activate your Conda environment
 source ~/miniconda3/bin/activate llama_env
 
-# Run the inference script
 python inference.py
 
 exit 0
-
 ```
 
-### 7.5. Submit the Job
+### 5.3. Submit the Job
 
 ```bash
 qsub run_inference.pbs
 ```
 
-### 7.6. View the Output
+## 6. Monitoring and Managing Jobs
 
-After the job completes, check the output file (e.g., `job_runinference.oXXXXXX`) in `/mmfs1/projects/j.li/llama_finetuning`.
+- Check job status: `qstat -u your_username`
+- Delete a job: `qdel job_id`
+- Check available resources: `pbsnodes -avSjL`
 
-## 8. Monitoring and Managing Jobs
+## 7. Cleaning Up
 
-- **Check Job Status**:
-  ```bash
-  qstat -u your_username
-  ```
+- Deactivate Conda environment: `conda deactivate`
+- Unload modules: `module unload cuda`
+- Remove unnecessary files to conserve storage space
 
-- **Delete a Job**:
-  ```bash
-  qdel job_id
-  ```
-  Replace `job_id` with the actual job ID.
+## 8. Troubleshooting
 
-- **Check Available Resources**:
-  ```bash
-  pbsnodes -avSjL
-  ```
+(Include the troubleshooting section from the original guide)
 
-## 9. Cleaning Up
-
-### 9.1. Deactivate the Conda Environment
-
-```bash
-conda deactivate
-```
-
-### 9.2. Unload Modules
-
-```bash
-module unload cuda
-```
-
-### 9.3. Remove Temporary Files
-
-Clean up any unnecessary files to conserve storage space.
-
-## 10. Troubleshooting
-
-### 10.1. Error Loading Anaconda Module
-
-**Issue**: `module load anaconda` returns an error.
-
-**Solution**: Install Miniconda manually as described in Step 4.
-
-### 10.2. Memory Errors
-
-**Solution**:
-- Reduce the batch size in `finetune.py`:
-  ```python
-  per_device_train_batch_size=1  # You can reduce this if necessary
-  ```
-- Increase memory allocation in the PBS script:
-  ```bash
-  #PBS -l select=1:ncpus=4:mem=256gb:ngpus=1
-  ```
-
-### 10.3. Module Conflicts
-
-**Solution**:
-- Unload conflicting modules before loading new ones:
-  ```bash
-  module unload conflicting_module
-  ```
-
-### 10.4. Access Issues
-
-**Solution**:
-- Verify your Hugging Face access token and permissions.
-- Ensure the base model path is correct and you have access rights.
-
-### 10.5. CUDA Errors
-
-**Solution**:
-- Ensure the CUDA module is loaded.
-- Check that your PyTorch installation matches the CUDA version:
-  ```bash
-  # Check CUDA version
-  nvcc --version
-
-  # Install matching PyTorch version
-  pip install torch==<version>+cu<cuda_version> torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu<cuda_version>
-  ```
-
-### 10.6. Permission Denied
-
-**Solution**:
-- Check file and directory permissions:
-  ```bash
-  chmod -R u+rwx /mmfs1/projects/j.li/llama_finetuning
-  ```
-- Ensure you have read/write access to the directories.
-
-## 11. Conclusion
+## 9. Conclusion
 
 You've successfully fine-tuned a LLaMA model on NDSU's CCAST system! This guide provided you with the steps to:
 
-- Set up your environment without the `anaconda` module.
-- Install Miniconda and create a Conda environment.
-- Prepare your custom dataset.
-- Fine-tune the model using your dataset.
-- Run inference with your fine-tuned model.
-- Monitor and manage your jobs on the CCAST system.
+- Set up your environment
+- Prepare your custom dataset
+- Fine-tune the model using your dataset
+- Run inference with your fine-tuned model
+- Monitor and manage your jobs on the CCAST system
 
-**Remember**:
-- Always adhere to CCAST usage policies.
-- Include the required acknowledgment in your research outputs:
-  > "This work used resources of the Center for Computationally Assisted Science and Technology (CCAST) at North Dakota State University, which were made possible in part by NSF MRI Award No. 2019077."
+Remember to adhere to CCAST usage policies and include the required acknowledgment in your research outputs.
 
-**Useful Resources**:
-- [CCAST User Guide](https://www.ndsu.edu/research/research_computing/ccast/)
-- [Meta AI LLaMA](https://ai.meta.com/llama/)
-- [Hugging Face Transformers Documentation](https://huggingface.co/docs/transformers/index)
-- [PyTorch Documentation](https://pytorch.org/docs/stable/index.html)
-
-If you have any further questions or encounter issues, feel free to ask for assistance or Contact CCast!
+For further assistance or questions, feel free to contact CCAST support.
